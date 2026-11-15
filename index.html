@@ -168,6 +168,7 @@ html.noanim .rv{opacity:1;transform:none;transition:none}
 .lg-err{margin:0;color:#ff8a98;font-size:.85rem}
 .lgb{display:flex;gap:10px}
 .lgc button{flex:1;padding:12px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--fg);font-weight:700}
+.lgc label.lgs{display:flex;align-items:center;gap:8px;font-size:.85rem}.lgc label.lgs input{width:auto;padding:0}
 .lgc button.go{background:var(--red);border-color:var(--red);color:#fff}
 .lgc button:disabled{opacity:.5}
 /* experiencia */
@@ -380,7 +381,7 @@ button,.chip,.cell,.card,.btn{user-select:none;-webkit-user-select:none;-webkit-
 <input type="file" id="upJson" accept="application/json,.json" hidden>
 <input type="file" id="upLogo" accept="image/*" hidden>
 <input type="file" id="upCover" accept="image/*" hidden>
-<div class="lg" id="lg" hidden role="dialog" aria-modal="true" aria-labelledby="lgT"><form class="lgc" id="lgF" autocomplete="on"><h2 id="lgT">Acceso al editor</h2><p class="lgh">Solo para el dueño de la web.</p><label>Usuario<input id="lgU" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label><label>Contraseña<input id="lgP" name="password" type="password" autocomplete="current-password" required></label><p class="lg-err" id="lgE" role="alert" hidden></p><div class="lgb"><button type="submit" class="go" id="lgGo">Entrar</button><button type="button" id="lgNo">Cancelar</button></div></form></div>
+<div class="lg" id="lg" hidden role="dialog" aria-modal="true" aria-labelledby="lgT"><div class="lgc" id="lgF"><h2 id="lgT">Acceso al editor</h2><p class="lgh">Solo para el dueño de la web.</p><label>Usuario<input id="lgU" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label><label>Contraseña<input id="lgP" name="password" type="password" autocomplete="current-password" required></label><label class="lgs"><input type="checkbox" id="lgSh"> Mostrar contraseña</label><p class="lg-err" id="lgE" role="alert" hidden></p><div class="lgb"><button type="button" class="go" id="lgGo">Entrar</button><button type="button" id="lgNo">Cancelar</button></div></div></div>
 
 <script>
 (()=>{
@@ -472,17 +473,21 @@ const AUTH0={s:'4e30ccb7ab51b145',h:'449227fe0a298aae4aa7be430627b1444253c8047ce
 async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 const authHash=(s,u,p)=>sha(s+'|'+u.trim().toLowerCase()+'|'+p);
 let lgFails=0;
-function openLogin(){const lg=$('#lg');lg.hidden=false;$('#lgE').hidden=true;$('#lgP').value='';setTimeout(()=>$('#lgU').focus(),30)}
+function openLogin(){const lg=$('#lg');lg.hidden=false;$('#lgSh').checked=false;$('#lgP').type='password';$('#lgE').hidden=true;$('#lgP').value='';setTimeout(()=>$('#lgU').focus(),30)}
 function closeLogin(){$('#lg').hidden=true}
 $('#lgNo').addEventListener('click',closeLogin);
+$('#lgSh').addEventListener('change',e=>{$('#lgP').type=e.target.checked?'text':'password'});
 $('#lg').addEventListener('click',e=>{if(e.target.id==='lg')closeLogin()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#lg').hidden)closeLogin()});
-$('#lgF').addEventListener('submit',async e=>{e.preventDefault();const go=$('#lgGo'),er=$('#lgE');go.disabled=true;
-  try{if(!(window.crypto&&crypto.subtle))throw 0;const a=S.auth&&S.auth.h?S.auth:AUTH0;const ok=(await authHash(a.s,$('#lgU').value,$('#lgP').value))===a.h;
+async function doLogin(){const go=$('#lgGo'),er=$('#lgE');if(go.disabled)return;go.disabled=true;
+  try{if(!(window.crypto&&crypto.subtle))throw 0;const a=S.auth&&S.auth.h?S.auth:AUTH0;const pv=$('#lgP').value;const ok=(await authHash(a.s,$('#lgU').value,pv))===a.h||(await authHash(a.s,$('#lgU').value,pv.trim()))===a.h;
     if(ok){lgFails=0;AUTHED=true;try{localStorage.setItem(KEY+'-ok','1')}catch(x){}closeLogin();$('#lgP').value='';toggleDr(true);if(!(S.auth&&S.auth.h))toast('Cambiá la contraseña inicial en Copias › Acceso al editor');go.disabled=false;return}
     lgFails++;er.textContent='Usuario o contraseña incorrectos.'}
   catch(x){er.textContent='No pude verificar el acceso. Abrí la web desde su link https.'}
-  er.hidden=false;setTimeout(()=>{go.disabled=false},Math.min(lgFails*800,6000))});
+  er.hidden=false;setTimeout(()=>{go.disabled=false},Math.min(lgFails*800,6000))}
+/* sin <form>: el visor de Claude bloquea el envío de formularios, así que se usa el clic y la tecla Enter */
+$('#lgGo').addEventListener('click',doLogin);
+['#lgU','#lgP'].forEach(q=>$(q).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();doLogin()}}));
 async function setAuth(){const u=($('#nuU').value||'').trim(),p=$('#nuP').value||'';
   if(u.length<3){toast('El usuario necesita al menos 3 caracteres');return}
   if(p.length<8){toast('La contraseña necesita al menos 8 caracteres');return}
@@ -491,7 +496,7 @@ async function setAuth(){const u=($('#nuU').value||'').trim(),p=$('#nuP').value|
   S.auth={s,h:await authHash(s,u,p)};save();drawDr();toast('Acceso actualizado. Descargá y subí la nueva copia para que valga en la web publicada')}
 function logout(){AUTHED=false;try{localStorage.removeItem(KEY+'-ok')}catch(e){}toggleDr(false);renderAll();toast('Sesión cerrada')}
 function copy(t,btn){const ok=()=>toast('Copiado');try{navigator.clipboard.writeText(t).then(ok,()=>fb())}catch(e){fb()}
-  function fb(){const a=document.createElement('textarea');a.value=t;document.body.append(a);a.select();try{document.execCommand('copy');ok()}catch(e){toast('Seleccioná el texto y copialo a mano')}a.remove()}}
+  function fb(){const a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;opacity:0';document.body.append(a);a.select();let r=false;try{r=document.execCommand('copy')}catch(e){}a.remove();if(r)ok();else{const q=$('#pasteJson');if(q){q.value=t;q.focus();q.select();toast('Texto listo en el recuadro: copialo con Ctrl + C')}else toast('No se pudo copiar')}}}
 
 /* ---------- medios ---------- */
 function parseMedia(m){if(m.on===false)return null;const r=parseMedia0(m);if(r)r.m=m;return r}
